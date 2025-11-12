@@ -288,7 +288,13 @@ class MemorySimulator:
         print("=" * 60)
         print("SIMULADOR DE MEMORIA - Estatisticas de Acesso")
         print("=" * 60)
-        print(f"Politica de Substituicao:   {self.replacement_policy}")
+        # [Alteracao] Rotulo de politica mais claro (TLB sempre LRU)
+        # validacao para os testes
+        if self.replacement_policy == 'LRU':
+            policy_label = 'LRU (TLB e Memoria)'
+        else:
+            policy_label = 'LRU (TLB) e SecondChance (Memoria)'
+        print(f"Politica de Substituicao:   {policy_label}")
         print(f"Tamanho da Pagina:          {self.page_size} bytes")
         print(f"Entradas na TLB:            {self.num_tlb_entries}")
         print(f"Numero de Frames:           {self.num_frames}")
@@ -297,6 +303,34 @@ class MemorySimulator:
         print(f"TLB Misses:                 {self.tlb_misses:,}")
         print(f"Page Faults:                {self.page_faults:,}")
         print("=" * 60)
+
+    # [Adicao] Impressao das tabelas (TLB, page table e frames)
+    # validacao para os testes
+    def print_tables(self):
+        # TLB
+        print("TLB (ordem: mais antigo -> mais recente)")
+        if not self.tlb:
+            print("  [vazia]")
+        else:
+            idx = 0
+            for pg, fr in self.tlb.items():
+                print(f"  {idx:02d}: pagina {pg} -> frame {fr}")
+                idx += 1
+        # Page Table (somente residentes)
+        print("Page Table (paginas residentes)")
+        if not self.page_table:
+            print("  [vazia]")
+        else:
+            # ordenar por frame para facilitar leitura
+            for pg, fr in sorted(self.page_table.items(), key=lambda x: x[1]):
+                print(f"  pagina {pg} -> frame {fr}")
+        # Frames
+        print("Frames (frame: pagina)")
+        for i, pg in enumerate(self.frames):
+            if pg is None:
+                print(f"  {i:02d}: -")
+            else:
+                print(f"  {i:02d}: {pg}")
 
 
 

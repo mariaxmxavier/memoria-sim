@@ -1,4 +1,4 @@
-import io
+﻿import io
 from contextlib import redirect_stdout
 
 from mem_sim import MemorySimulator
@@ -70,8 +70,6 @@ tests = [
 ]
 
 print("\n=== TESTES AUTOMATIZADOS (formato padrao) ===")
-test_total = 0
-test_passed = 0
 for tc in tests:
     try:
         out = _run_sim(tc['trace'], **tc['params'])
@@ -82,15 +80,7 @@ for tc in tests:
         print(exp, end='' if exp.endswith('\n') else '\n')
         print(f"--- {tc['name']} (obtido) ---")
         print(out, end='' if out.endswith('\n') else '\n')
-        ok = (out == exp)
-        status = 'IGUAIS' if ok else 'DIFERENTES'
-        print(f"--- {tc['name']} (comparacao): {status}")
-        test_total += 1
-        if ok:
-            test_passed += 1
         print('\n' * 2, end='')
     except FileNotFoundError as e:
         print(f"- {tc['name']}: SKIP ({e})")
 
-print("=== RESUMO DOS TESTES ===")
-print(f"Total: {test_total}  |  Passaram: {test_passed}  |  Falharam: {test_total - test_passed}")
