@@ -1,9 +1,10 @@
 import collections
-# [Adição] Import para cálculos de bits e validações
+# usei a lib math para verificar se é potência de 2 e calcular bits
 import math
 
 
-# [Nota] Usamos replacement_policy e adicionamos va_bits (default=32)
+# Foi trocado o rep_policy por replacement_policy para não precisar alterar a main
+# add va_bits; para simplificar deixei o default como 32
 class MemorySimulator:
     def __init__(self, page_size, num_tlb_entries, num_frames, replacement_policy, va_bits=32):
         """
@@ -16,6 +17,7 @@ class MemorySimulator:
         - replacement_policy (str): Política de substituição de páginas na memória ('LRU' ou 'SecondChance').
         - va_bits (int, opcional): Número de bits do endereço virtual do processo.
         """
+
         # [Adição] Armazenando parâmetros básicos do simulador
         self.page_size = page_size
         self.num_tlb_entries = num_tlb_entries
@@ -45,7 +47,7 @@ class MemorySimulator:
         if self.va_bits <= 0:
             raise ValueError("va_bits deve ser maior que zero")
 
-        # [Validação] Potências de 2 conforme sua especificação
+        # [Validação] Potências de 2 conforme a especificação
         if not self._is_power_of_two(self.page_size):
             raise ValueError("page_size deve ser potência de 2")
         if not self._is_power_of_two(self.num_tlb_entries):
