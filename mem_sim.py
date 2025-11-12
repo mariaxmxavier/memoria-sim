@@ -1,13 +1,31 @@
 import collections
 
+
+# Modifiquei o rep_policy para replacement_policy, para não ter que modificar a main.py
+# Impletei o va_bits com valor default 32, para não ter que modificar a main.py
+
+
 class MemorySimulator:
-    def __init__(self, page_size, num_tlb_entries, num_frames, rep_policy):
+    def __init__(self, page_size, num_tlb_entries, num_frames, replacement_policy, va_bits=32):
+        
+        """
+        Inicializa o simulador de memória virtual.
+
+        Parâmetros
+        - page_size (int): Tamanho da página em bytes.
+        - num_tlb_entries (int): Número de entradas da TLB (associativa por conjunto total).
+        - num_frames (int): Número de quadros (frames) na memória física.
+        - replacement_policy (str): Política de substituição de páginas na memória física.
+          Valores aceitos: 'LRU' ou 'SecondChance'. (A TLB será sempre LRU.)
+        - va_bits (int, opcional): Quantidade de bits do endereço virtual do processo.
+        """
         self.page_size = page_size
         self.num_tlb_entries = num_tlb_entries
-        self.num_frames = num_frames    
-        self.rep_policy = rep_policy
+        self.num_frames = num_frames
+        self.replacement_policy = replacement_policy
+        self.va_bits = va_bits
 
-        if rep_policy not in ['LRU', 'SecondChance']:
+        if replacement_policy not in ['LRU', 'SecondChance']:
             raise ValueError("Política de substituição inválida. Use 'LRU' ou 'SecondChance'.")
 
         self.tlb = []  
