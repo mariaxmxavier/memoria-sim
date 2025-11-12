@@ -1,4 +1,4 @@
-import collections
+﻿import collections
 import math
 
 # usei a lib math para verificar se e potencia de 2 e calcular bits
@@ -85,6 +85,13 @@ class MemorySimulator:
         self.tlb_misses = 0
         self.page_faults = 0
 
+        # [Adicao] Estruturas de reposicao de paginas (memoria)
+        # validacao para os testes
+        self.free_frames = list(range(self.num_frames))
+        self.mem_lru = collections.OrderedDict()  # usado quando politica = LRU
+        self.ref_bits = [0] * self.num_frames     # usado quando politica = SecondChance
+        self.ponteiro = 0                        # ponteiro circular para SecondChance
+
     # [Adicao] Utilitario para verificar potencia de 2
     # validacao para os testes
     @staticmethod
@@ -136,6 +143,113 @@ class MemorySimulator:
         if page_number in self.tlb:
             self.tlb.pop(page_number)
 
+    # [Adicao] Pego um frame livre, se existir
+    # validacao para os testes
+    def pegar_frame_livre(self):
+        """Retorna um indice de frame livre ou None se nao houver."""
+        if self.free_frames:
+            return self.free_frames.pop(0)
+        return None
+
+    # [Adicao] Marco uso da pagina na memoria
+    # validacao para os testes
+    def marca_uso_memoria(self, pagina: int, frame: int):
+        """Atualiza estruturas conforme a politica (LRU: recency; SC: ref_bit=1)."""
+        if self.replacement_policy == 'LRU':
+            if pagina in self.mem_lru:
+                self.mem_lru.pop(pagina)
+            self.mem_lru[pagina] = frame  # move para o fim (mais recente)
+        else:  # SecondChance
+            self.ref_bits[frame] = 1
+
+    # [Adicao] Escolho vitima pela politica LRU na RAM
+    # validacao para os testes
+    def lru_escolhe_pagina(self):
+        """Retorna (pagina, frame) menos recente na memoria (LRU)."""
+        if self.mem_lru:
+            pagina, frame = self.mem_lru.popitem(last=False)
+            return pagina, frame
+        # fallback: procura primeiro frame ocupado
+        for frame, pagina in enumerate(self.frames):
+            if pagina is not None:
+                return pagina, frame
+        raise RuntimeError('Sem pagina para evictar (inconsistencia)')
+
+    # [Adicao] Escolho vitima pela politica SecondChance (clock)
+    # validacao para os testes
+    def sc_escolhe_pagina(self):
+        """Retorna (pagina, frame) usando algoritmo do relogio (SecondChance)."""
+        n = self.num_frames
+        loops = 0
+        while True:
+            frame = self.ponteiro
+            pagina = self.frames[frame]
+            if pagina is None:
+                # frame livre, nao e vitima; avanca
+                self.ponteiro = (self.ponteiro + 1) % n
+            elif self.ref_bits[frame] == 1:
+                # da segunda chance e zera o bit
+                self.ref_bits[frame] = 0
+                self.ponteiro = (self.ponteiro + 1) % n
+            else:
+                # bit 0: escolhe como vitima
+                self.ponteiro = (self.ponteiro + 1) % n
+                return pagina, frame
+            loops += 1
+            if loops > 2 * n:
+                # seguranca: se nao achou, escolhe primeiro ocupado
+                for f, p in enumerate(self.frames):
+                    if p is not None:
+                        self.ponteiro = (f + 1) % n
+                        return p, f
+
+    # [Adicao] Removo uma pagina da RAM e atualizo estruturas
+    # validacao para os testes
+    def remover_da_ram(self, pagina: int, frame: int):
+        """Remove pagina do frame, TLB e estruturas auxiliares; libera o frame."""
+        # tira da tabela de paginas
+        if pagina in self.page_table:
+            self.page_table.pop(pagina, None)
+        # tira da TLB
+        self.tlb_remover(pagina)
+        # limpa estruturas por politica
+        if self.replacement_policy == 'LRU':
+            if pagina in self.mem_lru:
+                self.mem_lru.pop(pagina, None)
+        else:  # SecondChance
+            self.ref_bits[frame] = 0
+        # libera o frame
+        self.frames[frame] = None
+        if frame not in self.free_frames:
+            self.free_frames.append(frame)
+
+    # [Adicao] Carrego pagina em um frame (atualiza RAM e estruturas)
+    # validacao para os testes
+    def carregar_pagina(self, pagina: int, frame: int):
+        """Coloca pagina no frame, atualiza tabela e estruturas de politica."""
+        self.frames[frame] = pagina
+        self.page_table[pagina] = frame
+        self.marca_uso_memoria(pagina, frame)
+
+    # [Adicao] Obtenco um frame para a pagina (livre ou apos reposicao)
+    # validacao para os testes
+    def obter_frame_para_pagina(self, pagina: int):
+        """Retorna frame: usa livre se houver; senao evicta de acordo com a politica."""
+        frame = self.pegar_frame_livre()
+        if frame is not None:
+            return frame
+        # precisa evictar
+        if self.replacement_policy == 'LRU':
+            vit_pagina, vit_frame = self.lru_escolhe_pagina()
+        else:
+            vit_pagina, vit_frame = self.sc_escolhe_pagina()
+        self.remover_da_ram(vit_pagina, vit_frame)
+        # apos remover, pegar um livre
+        frame = self.pegar_frame_livre()
+        if frame is None:
+            # deve existir um livre agora; fallback usa o vit_frame
+            frame = vit_frame
+        return frame
     # [Adicao] Acesso a memoria virtual
     # validacao para os testes
     def access_memory(self, virtual_address):
@@ -143,7 +257,30 @@ class MemorySimulator:
         Simula o acesso a um endereco virtual.
         Deve atualizar os contadores e aplicar a politica de substituicao se necessario.
         """
-        pass
+        # traduz VA para pagina/offset
+        pagina, _ = self.va_para_pagina_offset(virtual_address)
+
+        # tenta TLB (LRU)
+        frame = self.tlb_busca(pagina)
+        if frame is not None:
+            # hit de TLB: marcar uso na memoria (LRU/SC)
+            self.marca_uso_memoria(pagina, frame)
+            return
+
+        # miss de TLB: verifica se pagina ja esta na RAM
+        frame = self.page_table.get(pagina)
+        if frame is not None:
+            # pagina em RAM: inserir na TLB e marcar uso
+            self.tlb_insere(pagina, frame)
+            self.marca_uso_memoria(pagina, frame)
+            return
+
+        # page fault: precisa trazer pagina para a RAM
+        self.page_faults += 1
+        frame = self.obter_frame_para_pagina(pagina)
+        self.carregar_pagina(pagina, frame)
+        self.tlb_insere(pagina, frame)
+        return
 
     # [Adicao] Impressao das estatisticas
     # validacao para os testes
@@ -160,4 +297,6 @@ class MemorySimulator:
         print(f"TLB Misses:                 {self.tlb_misses:,}")
         print(f"Page Faults:                {self.page_faults:,}")
         print("=" * 60)
+
+
 
